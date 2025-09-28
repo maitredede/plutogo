@@ -6,3 +6,8 @@ int stream_write_wrapper(void *user_data, const void *data, int length)
 {
     return goStreamWriteCallback(user_data, (void *)data, length);
 }
+
+plutobook_resource_data_t *resource_fetch_wrapper(void *closure, const char *url)
+{
+    return goResourceLoaderCallback(closure, (void *)url);
+}

@@ -97,8 +97,8 @@ func (c *Canvas) WritePNGToWriter(writer io.Writer) error {
 	sw := &StreamWriter{writer: writer}
 
 	// Enregistrer le StreamWriter
-	id := registerStreamWriter(sw)
-	defer unregisterStreamWriter(id)
+	id := streamWriters.register(sw)
+	defer streamWriters.unregister(id)
 
 	// Appeler la fonction C avec notre callback
 	result := C.plutobook_image_canvas_write_to_png_stream(

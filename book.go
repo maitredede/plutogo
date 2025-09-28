@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 	"unsafe"
 )
@@ -21,6 +22,9 @@ import (
 // Book represents a PlutoBook instance
 type Book struct {
 	ptr *C.plutobook_t
+
+	lck            sync.Mutex
+	resourceLoader uintptr
 }
 
 // NewBook creates a new PlutoBook instance
@@ -105,7 +109,7 @@ func NewBookWithPresetPageSize(preset int, margins PageMargins, mediaType MediaT
 	return &Book{ptr: ptr}, nil
 }
 
-// Close releases the PlutoBook instance
+// Close Releases the PlutoBook instance
 func (b *Book) Close() {
 	if b.ptr != nil {
 		C.plutobook_destroy(b.ptr)
@@ -113,6 +117,7 @@ func (b *Book) Close() {
 	}
 }
 
+// ClearContent Clears the content of the document
 func (b *Book) ClearContent() error {
 	if b.ptr == nil {
 		return ErrBookIsClosed
@@ -121,7 +126,7 @@ func (b *Book) ClearContent() error {
 	return nil
 }
 
-// LoadHTML loads HTML content from a string
+// LoadHTML Loads HTML content from a string
 func (b *Book) LoadHTML(htmlContent string, userStyle, userScript string, baseURL string) error {
 	if b.ptr == nil {
 		return ErrBookIsClosed
@@ -150,7 +155,7 @@ func (b *Book) LoadHTML(htmlContent string, userStyle, userScript string, baseUR
 	return nil
 }
 
-// LoadURL loads HTML content from a file or URL
+// LoadURL Loads HTML content from a file or URL
 func (b *Book) LoadURL(url, userStyle, userScript string) error {
 	if b.ptr == nil {
 		return ErrBookIsClosed
@@ -176,7 +181,7 @@ func (b *Book) LoadURL(url, userStyle, userScript string) error {
 	return nil
 }
 
-// WriteToPDF exports the document as PDF
+// WriteToPDF Exports the document as PDF
 func (b *Book) WriteToPDF(filename string) error {
 	if b.ptr == nil {
 		return ErrBookIsClosed
@@ -196,6 +201,7 @@ func (b *Book) WriteToPDF(filename string) error {
 	return nil
 }
 
+// WriteToPDF Exports the document as PNG
 func (b *Book) WriteToPNG(filename string, width int, height int) error {
 	if b.ptr == nil {
 		return ErrBookIsClosed
@@ -218,6 +224,7 @@ func (b *Book) WriteToPNG(filename string, width int, height int) error {
 	return nil
 }
 
+// WriteToPNGStream Writes the entire document to a PNG image stream
 func (b *Book) WriteToPNGStream(writer io.Writer, width int, height int) error {
 	if b.ptr == nil {
 		return ErrBookIsClosed
@@ -227,8 +234,8 @@ func (b *Book) WriteToPNGStream(writer io.Writer, width int, height int) error {
 	sw := &StreamWriter{writer: writer}
 
 	// Enregistrer le StreamWriter
-	id := registerStreamWriter(sw)
-	defer unregisterStreamWriter(id)
+	id := streamWriters.register(sw)
+	defer streamWriters.unregister(id)
 
 	// Appeler la fonction C avec notre callback
 	cWidth := C.int(width)
@@ -255,6 +262,7 @@ func (b *Book) WriteToPNGStream(writer io.Writer, width int, height int) error {
 	return sw.err
 }
 
+// WriteToPDFStream Writes the entire document to a PDF stream
 func (b *Book) WriteToPDFStream(writer io.Writer) error {
 	if b.ptr == nil {
 		return ErrBookIsClosed
@@ -264,8 +272,8 @@ func (b *Book) WriteToPDFStream(writer io.Writer) error {
 	sw := &StreamWriter{writer: writer}
 
 	// Enregistrer le StreamWriter
-	id := registerStreamWriter(sw)
-	defer unregisterStreamWriter(id)
+	id := streamWriters.register(sw)
+	defer streamWriters.unregister(id)
 
 	// Appeler la fonction C avec notre callback
 	result := C.plutobook_write_to_pdf_stream(
@@ -356,6 +364,22 @@ func (b *Book) GetDocumentHeight() float64 {
 		return 0
 	}
 	return float64(C.plutobook_get_document_height(b.ptr))
+}
+
+// GetViewportWidth Returns the width of the viewport
+func (b *Book) GetViewportWidth() float64 {
+	if b.ptr == nil {
+		return 0
+	}
+	return float64(C.plutobook_get_viewport_width(b.ptr))
+}
+
+// GetViewportHeight Returns the height of the viewport
+func (b *Book) GetViewportHeight() float64 {
+	if b.ptr == nil {
+		return 0
+	}
+	return float64(C.plutobook_get_viewport_height(b.ptr))
 }
 
 // RenderPage renders a specific page to the canvas
@@ -462,4 +486,37 @@ func (b *Book) SetMetadata(meta PdfMetadata, value string) error {
 	cValue := C.CString(value)
 	C.plutobook_set_metadata(b.ptr, cMeta, cValue)
 	return nil
+}
+
+func (b *Book) SetCustomResourceFetcher(loader CustomResourceLoader) error {
+	if b.ptr == nil {
+		return ErrBookIsClosed
+	}
+
+	b.lck.Lock()
+	defer b.lck.Unlock()
+
+	if b.resourceLoader != 0 {
+		resourceLoaders.unregister(b.resourceLoader)
+	}
+
+	rl := &resourceLoaderData{
+		loader: loader,
+	}
+	id := resourceLoaders.register(rl)
+
+	C.plutobook_set_custom_resource_fetcher(
+		b.ptr,
+		C.plutobook_resource_fetch_callback_t(C.resource_fetch_wrapper),
+		unsafe.Pointer(&id),
+	)
+	return nil
+}
+
+func (b *Book) HasCustomResourceFetcherCallback() bool {
+	if b.ptr == nil {
+		return false
+	}
+	cb := C.plutobook_get_custom_resource_fetcher_callback(b.ptr)
+	return cb != nil
 }
