@@ -110,11 +110,13 @@ func NewBookWithPresetPageSize(preset int, margins PageMargins, mediaType MediaT
 }
 
 // Close Releases the PlutoBook instance
-func (b *Book) Close() {
-	if b.ptr != nil {
-		C.plutobook_destroy(b.ptr)
-		b.ptr = nil
+func (b *Book) Close() error {
+	if b.ptr == nil {
+		return ErrBookIsClosed
 	}
+	C.plutobook_destroy(b.ptr)
+	b.ptr = nil
+	return nil
 }
 
 // ClearContent Clears the content of the document
@@ -335,6 +337,31 @@ func (b *Book) GetPageSize() PageSize {
 		Width:  float64(size.width),
 		Height: float64(size.height),
 	}
+}
+
+// GetPageMargins returns the page size in points
+func (b *Book) GetPageMargins() PageMargins {
+	if b.ptr == nil {
+		return PageMargins{}
+	}
+
+	margins := C.plutobook_get_page_margins(b.ptr)
+	return PageMargins{
+		Top:    float64(margins.top),
+		Right:  float64(margins.right),
+		Bottom: float64(margins.bottom),
+		Left:   float64(margins.left),
+	}
+}
+
+// GetPageMargins returns the page size in points
+func (b *Book) GetMediaType() MediaType {
+	if b.ptr == nil {
+		return MediaTypePrint
+	}
+
+	media := C.plutobook_get_media_type(b.ptr)
+	return MediaType(media)
 }
 
 // GetPageSize returns the page size in points
