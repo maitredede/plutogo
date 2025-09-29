@@ -42,6 +42,14 @@ func (b *Book) GetPageSize() PageSize {
 	return libGetPageSize(b.ptr)
 }
 
+func (b *Book) GetPageSizeAt(index int) PageSize {
+	libInit()
+	if b.ptr == 0 {
+		return PageSize{}
+	}
+	return libGetPageSizeAt(b.ptr, index)
+}
+
 func (b *Book) GetMediaType() MediaType {
 	libInit()
 	if b.ptr == 0 {

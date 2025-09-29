@@ -43,6 +43,7 @@ func libInitFuncs() {
 
 	//purego.RegisterLibFunc(&libGetPageSize, initPtr, "plutobook_get_page_size")
 	registerFFIGetPageSize()
+	registerFFIGetPageSizeAt()
 	registerFFIGetPageMargins()
 	purego.RegisterLibFunc(&libGetMediaType, initPtr, "plutobook_get_media_type")
 }

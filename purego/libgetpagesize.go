@@ -7,7 +7,8 @@ import (
 )
 
 var (
-	libGetPageSize func(book uintptr) PageSize
+	libGetPageSize   func(book uintptr) PageSize
+	libGetPageSizeAt func(book uintptr, index int) PageSize
 )
 
 func registerFFIGetPageSize() {
@@ -24,6 +25,26 @@ func registerFFIGetPageSize() {
 			unsafe.Pointer(book),
 		}
 		ffi.Call(&libGetPageSizeCIF, libGetPageSizeSym, unsafe.Pointer(&ret), args...)
+		return ret
+	}
+}
+
+func registerFFIGetPageSizeAt() {
+	sym := mustGetSymbol("plutobook_get_page_size_at")
+
+	var cif ffi.Cif
+	if ok := ffi.PrepCif(&cif, ffi.DefaultAbi, 2, &ffiPageSizeType, &ffi.TypePointer, &ffi.TypeUint16); ok != ffi.OK {
+		panic("plutobook_get_page_size_at cif prep is not OK")
+	}
+
+	libGetPageSizeAt = func(book uintptr, index int) PageSize {
+		nIndex := uint16(index)
+		var ret PageSize
+		args := []unsafe.Pointer{
+			unsafe.Pointer(book),
+			unsafe.Pointer(&nIndex),
+		}
+		ffi.Call(&cif, sym, unsafe.Pointer(&ret), args...)
 		return ret
 	}
 }
